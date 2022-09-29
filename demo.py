@@ -8,7 +8,7 @@ from __future__ import print_function
 from mpi4py import MPI
 from parutils import pprint
 from MPIPool import MyPool
-
+import os
 # 一级并行
 comm = MPI.COMM_WORLD
 
@@ -27,12 +27,14 @@ target_map = {
     700:(0,["05","06"]),
     900:(0,["07"]),
 }
-Total_frame = 1000
+Total_frame = 10
 TarQueue = []
+
+Max_Process = os.cpu_count()
 
 def main():
     # 初始化进程池
-    Pool = MyPool(comm.rank,1)
+    Pool = MyPool(comm.rank,(Max_Process - comm.size)//comm.size)
     # 从雷达发现目标群,到对目标群完成进行计算，为一帧
     for frame in range(Total_frame):
         print("-"*78)
