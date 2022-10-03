@@ -116,4 +116,4 @@ def main(m,n,val):
     print(C_shared_gpu)
 
 if __name__ == "__main__":
-    main(0,0)
+    main(0,0,0)

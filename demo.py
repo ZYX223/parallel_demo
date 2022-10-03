@@ -9,8 +9,7 @@ from mpi4py import MPI
 from parutils import pprint
 from MPIPool import MyPool
 import os
-import cuda_text2
-import random
+
 # 一级并行
 comm = MPI.COMM_WORLD
 
@@ -50,8 +49,8 @@ def main():
                     TarQueue.remove(tar)
         if len(TarQueue):
             # MPIPool 计算,二级并行
-            #Pool.calculate(TarQueue)
-            cuda_text2.main(700,500,3)
+            Pool.calculate(TarQueue)
+            
         
 if __name__ == '__main__':
     t = MPI.Wtime()

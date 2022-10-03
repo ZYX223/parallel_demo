@@ -17,8 +17,7 @@ class MyPool:
 def simulator(tar):
     # 包含诸元计算，生成发射令，导弹位置估计
     # 诸元计算4个发射车，需要并行,可考虑 cuda 加速
-    cuda_text2.main()
-    
+    cuda_text2.main(700,500,3)
     return [tar,1]
 
 
