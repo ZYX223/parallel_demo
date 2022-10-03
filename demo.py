@@ -9,6 +9,8 @@ from mpi4py import MPI
 from parutils import pprint
 from MPIPool import MyPool
 import os
+import cuda_text2
+import random
 # 一级并行
 comm = MPI.COMM_WORLD
 
@@ -17,7 +19,7 @@ pprint(" Running on %d cores" % comm.size)
 pprint("-"*78)
 
 target_map = {
-    5:(1,["01","02","03"]),
+    5:(1,["01"]),
     20:(1,["04"]),
     25:(1,["05","06"]),
     50:(1,["07"]),
@@ -27,14 +29,15 @@ target_map = {
     700:(0,["05","06"]),
     900:(0,["07"]),
 }
-Total_frame = 10
+Total_frame = 20
 TarQueue = []
 
 Max_Process = os.cpu_count()
 
 def main():
     # 初始化进程池
-    Pool = MyPool(comm.rank,(Max_Process - comm.size)//comm.size)
+    max_workers = (Max_Process - comm.size)//comm.size
+    Pool = MyPool(comm.rank,1)
     # 从雷达发现目标群,到对目标群完成进行计算，为一帧
     for frame in range(Total_frame):
         print("-"*78)
@@ -47,7 +50,8 @@ def main():
                     TarQueue.remove(tar)
         if len(TarQueue):
             # MPIPool 计算,二级并行
-            Pool.calculate(TarQueue)
+            #Pool.calculate(TarQueue)
+            cuda_text2.main(700,500,3)
         
 if __name__ == '__main__':
     t = MPI.Wtime()
