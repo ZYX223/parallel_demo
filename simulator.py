@@ -8,13 +8,15 @@ tags = common.tags
 status = MPI.Status()
 
 def calculator(tar):
+    # target = ["No.", position, meet_flag, timestamp]
     # update pos for every calculator
     print ("Worker Rank :%d",comm.rank)
     res = copy.copy(tar)
-    res[1] += 1
+    # res[1] += 1
+    print(res)
     if res[1] == 10:
         print("Worker %d send HIT msg"%(comm.rank))
-        res[2] = round(time.time() - res[2],2)
+        res[2] = 1
         comm.send(res,dest=0,tag=tags.HIT)
     else:
         print("Worker %d send FLY msg"%(comm.rank))

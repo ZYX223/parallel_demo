@@ -11,6 +11,7 @@ import sys
 import Pool
 import common
 import time
+import copy
 tags = common.tags
 
 # usage 
@@ -23,39 +24,56 @@ TOTAL_RES_LIST = []
 
 def fire_sys():
     print ("Fire system id: %d"%(comm.rank))
-    Total_frame = 15
+    Total_frame = 51
     Max_process = 1 + 20
+    Target_Q = []
+    Res_list = []
     # read target parameters
     # 1: increase target
     # 0: decrease target
+
+    # target = ["No.", position, meet_flag, timestamp]
     target_map = {
-        5:[["01",0]]*30,
-        20:[["04",0]]*50,
-        40:[["05",0],["06",0]]*40,
-        50:[["07",0]]*10,
+        5:[["01",0,0,0]]*30,
+        20:[["04",0,0,0]]*50,
+        40:[["05",0,0,0]]*40,
+        50:[["07",0,0,0]]*10,
     }
 
     # Process Pool
     pool = Pool.MyPool(Max_process,"simulator.py")
     # 从雷达发现目标群,到对目标群完成进行计算，为一帧
-    for frame in range(Total_frame):
+    frame = 0
+
+    while frame < Total_frame or len(Target_Q):
         print("-"*78)
         print("Fire system %d: cur frame is %d" %(comm.rank,frame))
         # increase new target
         if frame in target_map.keys():
-            
-            target_map[frame][0].append(time.time())
-            pool.submit_task(target_map[frame])
+            target_map[frame][0][3] = time.time()
+            Target_Q.extend(target_map[frame])
         
-        
-        print("Process Queue len :%d"%(len(pool.Process_queue)))
+        if len(Target_Q):
+            Target_Q = pool.create(Target_Q)
+            Target_Q = update(Target_Q,Res_list)
+        frame += 1
     # time.sleep(5)
     print("Pool exit")
-    result_data = pool.exit()
+    pool.exit()
     
-    # print("final res",result_data,len(result_data))
-    comm.send(result_data,0,tag=tags.DONE)
+    print("final res",len(Res_list))
+    comm.send(Res_list,0,tag=tags.DONE)
 
+def update(Target_Q,Res_list):
+    tmp = list()
+    for target in Target_Q:
+        if target[2] == 0:
+            target[1] += 1
+            tmp.append(target)
+        else:
+            target[3] = round(time.time()-target[3],2)
+            Res_list.append(target)
+    return copy.deepcopy(tmp)
 
 def scene_process():
     print ("Scene id: %d"%(comm.rank))

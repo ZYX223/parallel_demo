@@ -1,7 +1,9 @@
+from copy import copy
 from mpi4py import MPI
 import sys
 import threading
 import common
+import copy
 
 tags = common.tags
 status = MPI.Status()
@@ -32,8 +34,8 @@ class MyPool():
             source = status.Get_source()
             print ("Recv msg from %d, msg is :%d"%(source,tag))
             if tag == tags.FLY:
-                self.Task_queue.append(msg)
                 self.Process_queue.append(source)
+                self.result.append(msg)
 
             elif tag == tags.HIT:
                 self.Process_queue.append(source)
@@ -43,11 +45,11 @@ class MyPool():
                 self.closed_worker += 1
         print("running thread is shutdown")
 
-    def submit_task(self,agrvs):
-        if type(agrvs[0]) != list:
-            self.Task_queue.append(agrvs)
+    def submit_task(self,argvs):
+        if type(argvs[0]) != list:
+            self.Task_queue.append(argvs)
         else:
-            self.Task_queue.extend(agrvs)
+            self.Task_queue.extend(argvs)
 
     def send_running(self):
         while self.closed_worker < self.max_worker-1:
@@ -65,6 +67,16 @@ class MyPool():
         pro_id = self.Process_queue[0]
         self.Process_queue = self.Process_queue[1:]
         self.comm.send(argvs,dest=pro_id,tag=tags.EXEC)
+
+    def create(self,argvs):
+        self.result.clear()
+        if type(argvs[0]) != list:
+            self.Task_queue.append(argvs)
+        else:
+            self.Task_queue.extend(argvs)
+        while len(self.Process_queue) +1 != self.max_worker or len(self.result) != len(argvs):
+            continue
+        return copy.deepcopy(self.result)
 
     def exit(self):
         while len(self.Process_queue) +1 != self.max_worker or len(self.Task_queue) != 0:
