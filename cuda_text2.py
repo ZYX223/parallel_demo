@@ -69,9 +69,9 @@ time_gpu_shared = end_gpu_shared_memory - start_gpu_shared_memory
 print("GPU time(shared memory):" + str(time_gpu_shared))
 C_shared_gpu = C_global_mem.copy_to_host()
 """
-def main(m,n,val):
-    A = numpy.full((m, n), val, numpy.float)
-    B = numpy.full((n , m), val, numpy.float)
+def calculator():
+    A = numpy.full((700, 5000), 3, numpy.float)
+    B = numpy.full((5000, 700), 5, numpy.float)
     C_cpu = numpy.full((A.shape[0], B.shape[1]), 0, numpy.float)
     """
     print("start processing in CPU")
@@ -93,18 +93,14 @@ def main(m,n,val):
     blocks_per_grid_y = int(math.ceil(B.shape[1] / threads_per_block[1]))
     blocks_per_grid = (blocks_per_grid_x, blocks_per_grid_y)
     
-    
-    
     start_gpu = time.time()
     matmul_gpu[blocks_per_grid, threads_per_block](A_global_mem, B_global_mem, C_global_mem)
     cuda.synchronize()
     end_gpu = time.time()
     time_gpu = end_gpu - start_gpu
-    print("GPU time(Global memory):" + str(time_gpu))
-    C_global_gpu = C_global_mem.copy_to_host()
-    print(C_global_gpu)
+    print("GPU time(warm up):" + str(time_gpu))
+    #C_global_gpu = C_global_mem.copy_to_host()
 
-    
     start_gpu_shared_memory = time.time()
     matmul_shared_mem[blocks_per_grid, threads_per_block](A_global_mem, B_global_mem, C_shared_mem)
     cuda.synchronize()
@@ -112,8 +108,18 @@ def main(m,n,val):
 
     time_gpu_shared = end_gpu_shared_memory - start_gpu_shared_memory
     print("GPU time(shared memory):" + str(time_gpu_shared))
-    C_shared_gpu = C_global_mem.copy_to_host()
-    print(C_shared_gpu)
+    #C_shared_gpu = C_global_mem.copy_to_host()
+    
+    start_gpu = time.time()
+    matmul_gpu[blocks_per_grid, threads_per_block](A_global_mem, B_global_mem, C_global_mem)
+    cuda.synchronize()
+    end_gpu = time.time()
+    time_gpu = end_gpu - start_gpu
+    print("GPU time(Global memory):" + str(time_gpu))
+    #C_global_gpu = C_global_mem.copy_to_host()
 
+    
+    
+    
 if __name__ == "__main__":
-    main(0,0,0)
+    calculator()
