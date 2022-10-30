@@ -11,7 +11,7 @@ import sys
 import Pool
 import common
 import time
-import copy
+
 tags = common.tags
 
 # usage 
@@ -24,39 +24,43 @@ TOTAL_RES_LIST = []
 
 def fire_sys():
     print ("Fire system id: %d"%(comm.rank))
-    Total_frame = 51
-    Max_process = 1 + 20
+    Total_frame = 60
+    FireCar_NUM = 4
+    Max_process = 1 + 20 + FireCar_NUM
     Target_Q = []
     Res_list = []
     # read target parameters
     # 1: increase target
     # 0: decrease target
 
-    # target = ["No.", position, meet_flag, timestamp]
+    # target = ["No.", position, [car_id, missile_id],meet_flag, timestamp]
     target_map = {
-        5:[["01",0,0,0]]*30,
-        20:[["04",0,0,0]]*50,
-        40:[["05",0,0,0]]*40,
-        50:[["07",0,0,0]]*10,
+        5:[[str(x),100,[-1,-1],0,0] for x in range(30)],
+        20:[[str(x),90,[-1,-1],0,0] for x in range(30,30+50)],
+        40:[[str(x),120,[-1,-1],0,0] for x in range(80,80+40)],
+        50:[[str(x),70,[-1,-1],0,0] for x in range(120,120+10)],
     }
 
     # Process Pool
-    pool = Pool.MyPool(Max_process,"simulator.py")
+    pool = Pool.MyPool(Max_process,FireCar_NUM,'simulator.py')
     # 从雷达发现目标群,到对目标群完成进行计算，为一帧
     frame = 0
-
     while frame < Total_frame or len(Target_Q):
         print("-"*78)
         print("Fire system %d: cur frame is %d" %(comm.rank,frame))
+        start = MPI.Wtime()
         # increase new target
         if frame in target_map.keys():
-            target_map[frame][0][3] = time.time()
+            for i in range(len(target_map[frame])):
+                target_map[frame][i][4] = MPI.Wtime()
             Target_Q.extend(target_map[frame])
         
         if len(Target_Q):
             Target_Q = pool.create(Target_Q)
             Target_Q = update(Target_Q,Res_list)
+        
         frame += 1
+        print("Frame %d time is :%f"%(frame,round(MPI.Wtime()-start,2)))
     # time.sleep(5)
     print("Pool exit")
     pool.exit()
@@ -67,13 +71,13 @@ def fire_sys():
 def update(Target_Q,Res_list):
     tmp = list()
     for target in Target_Q:
-        if target[2] == 0:
-            target[1] += 1
+        if target[3] == 0 and target[1] > 0:
+            target[1] -= 5
             tmp.append(target)
         else:
-            target[3] = round(time.time()-target[3],2)
+            target[4] = round(MPI.Wtime()-target[4],2)
             Res_list.append(target)
-    return copy.deepcopy(tmp)
+    return tmp
 
 def scene_process():
     print ("Scene id: %d"%(comm.rank))

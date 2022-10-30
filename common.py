@@ -8,7 +8,9 @@ def enum(*sequential, **named):
 
 
 # Define MPI message tags
-tags = enum('READY', 'DONE', 'EXIT', 'START','EXEC','FLY','HIT')
+tags = enum('READY', 'DONE', 'EXIT', 'START','EXEC','FLY','HIT',
+            'CAR_EXEC','LAUNCH_REQUIRE','CAR_RES','LAUNCH_INFO',
+            'UPDATE_MISSILE','MISSILE_POS','MISSILE_REPLACE')
 
 if __name__ == "__main__":
     pass

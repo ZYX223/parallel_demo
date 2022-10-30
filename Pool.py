@@ -1,24 +1,30 @@
-from copy import copy
 from mpi4py import MPI
 import sys
 import threading
 import common
-import copy
 
 tags = common.tags
 status = MPI.Status()
 
+
+
 class MyPool():
-    def __init__(self,max_worker,target_file):
+    def __init__(self,max_worker,car_num,target_file):
         self.max_worker = max_worker
+        self.car_num = car_num
+        self.worker_num = self.max_worker - self.car_num -1
         self.closed_worker = 0
         
         self.comm = MPI.COMM_SELF.Spawn(
                 sys.executable,
                 args=[target_file],
                 maxprocs=self.max_worker)
-
-        self.Process_queue = [x for x in range(self.max_worker) if x != 0]
+        print("master node :%d"%self.comm.rank)
+        # self.comm.bcast(self.car_num,root=0)
+        # content master node and launch car node [0,1,2,3,4]
+        # worker node list [5,6,7,8,...,max_worker]
+        self.Car_list = [x+1 for x in range(self.car_num)]
+        self.Process_queue = [x + self.car_num +1 for x in range(self.worker_num)]
         self.Task_queue = []
         self.result = []
 
@@ -27,19 +33,37 @@ class MyPool():
         self.recv_t.start()
         self.send_t.start()
 
+    def Send(self,argvs,des,tag):
+        self.comm.send([argvs,des],dest=0,tag=tag)
+
     def recv_running(self):
-        while self.closed_worker < self.max_worker-1:
+        while self.closed_worker < self.worker_num + self.car_num:
             msg = self.comm.recv(source=MPI.ANY_SOURCE,tag=MPI.ANY_TAG,status=status)
             tag = status.Get_tag()
             source = status.Get_source()
-            print ("Recv msg from %d, msg is :%d"%(source,tag))
+            # print ("Recv msg from %d, msg is :%d"%(source,tag))
             if tag == tags.FLY:
                 self.Process_queue.append(source)
                 self.result.append(msg)
-
+            
             elif tag == tags.HIT:
                 self.Process_queue.append(source)
                 self.result.append(msg)
+                self.comm.send(msg[2],dest=msg[2][0],tag=tags.MISSILE_REPLACE)
+
+            elif tag == tags.CAR_EXEC or tag == tags.CAR_RES:
+                # self.Send(msg[0],msg[1],tag)
+                # print("CAR_EXEC source: %d des :%d"%(source,msg[1]))
+                self.comm.send([msg[0],source],dest=msg[1],tag=tag)
+                
+
+            elif tag == tags.LAUNCH_REQUIRE or tag == tags.LAUNCH_INFO:
+                # print("LAUNCH_REQUIRE source: %d des :%d"%(source,msg[1]))
+                self.comm.send([msg[0],source],dest=msg[1],tag=tag)
+
+            elif tag == tags.UPDATE_MISSILE or tag == tags.MISSILE_POS:
+                # print("UPDATE_MISSILE source: %d des :%d"%(source,msg[1]))
+                self.comm.send([msg[0],source],dest=msg[1],tag=tag)
 
             elif tag == tags.EXIT:
                 self.closed_worker += 1
@@ -52,7 +76,7 @@ class MyPool():
             self.Task_queue.extend(argvs)
 
     def send_running(self):
-        while self.closed_worker < self.max_worker-1:
+        while self.closed_worker < self.worker_num + self.car_num:
             if len(self.Task_queue):
                 for task in self.Task_queue:
                     self.exec(task)
@@ -66,6 +90,7 @@ class MyPool():
             continue
         pro_id = self.Process_queue[0]
         self.Process_queue = self.Process_queue[1:]
+        # print("process %d"%(pro_id))
         self.comm.send(argvs,dest=pro_id,tag=tags.EXEC)
 
     def create(self,argvs):
@@ -74,17 +99,19 @@ class MyPool():
             self.Task_queue.append(argvs)
         else:
             self.Task_queue.extend(argvs)
-        while len(self.Process_queue) +1 != self.max_worker or len(self.result) != len(argvs):
+        while len(self.Process_queue)  != self.worker_num or len(self.result) != len(argvs):
             continue
-        return copy.deepcopy(self.result)
+        return self.result
 
     def exit(self):
-        while len(self.Process_queue) +1 != self.max_worker or len(self.Task_queue) != 0:
+        while len(self.Process_queue)  != self.worker_num or len(self.Task_queue) != 0:
             continue
         # print(len(self.Process_queue))
         # print(len(self.Task_queue))
         for process in self.Process_queue:
             self.comm.send(None,dest=process,tag=tags.EXIT)
+        for car in self.Car_list:
+            self.comm.send(None,dest=car,tag=tags.EXIT)
         self.recv_t.join()
         self.send_t.join()
         self.comm.Disconnect()
