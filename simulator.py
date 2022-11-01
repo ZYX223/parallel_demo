@@ -1,8 +1,6 @@
 from mpi4py import MPI
-import time
 import threading
 import common
-import copy
 
 # target = ["No.", position, [car_id,missile_id],meet_flag, timestamp]
 
@@ -13,64 +11,68 @@ status = MPI.Status()
 def Send(argvs,des,tag):
     comm.send([argvs,des],dest=0,tag=tag)
 
-
 def calculator(tar):
-    # print ("Worker Rank :%d"%comm.rank,tar)
     res_ls = list()
     launch_flag = int()
     missile_pos = int()
     # launch_car calculater every frame
+    t1 = MPI.Wtime()
     for car in car_list:
-        Send(tar,car,tags.CAR_EXEC)
-        [tmp_res,sour] = comm.recv(source=0,tag=tags.CAR_RES,status=status)
+        common_comm.send(tar,dest=car,tag=tags.CAR_EXEC)
+        tmp_res = common_comm.recv(source=car,tag=tags.CAR_RES,status=status)
         res_ls.append([car,tmp_res])
-
+    
+    t2 = MPI.Wtime()
+    print("car exec %f"%(t2-t1))
     # missile launch require
     if tar[2] == [-1,-1]:
         # max policy
         launch_res = max(res_ls,key= lambda x:x[1])
         car_id = launch_res[0]
 
-        Send(tar,car_id,tags.LAUNCH_REQUIRE)
-        [[launch_flag,missile_id],sour] = comm.recv(source=0,tag=tags.LAUNCH_INFO,status=status)
+        common_comm.send(tar,dest=car_id,tag=tags.LAUNCH_REQUIRE)
+        [launch_flag,missile_id] = common_comm.recv(source=car_id,tag=tags.LAUNCH_INFO,status=status)
 
         if launch_flag == 1:
             tar[2] = [car_id,missile_id]
-            Send(tar,tar[2][0],tags.UPDATE_MISSILE)
-            [pos,sour] = comm.recv(source=0,tag=tags.MISSILE_POS)
+            common_comm.send(tar,dest=car_id,tag=tags.UPDATE_MISSILE)
+            pos = common_comm.recv(source=car_id,tag=tags.MISSILE_POS)
             missile_pos = pos
-
+    
     # missile has launched
     # need to update missile position
     else:
-        Send(tar,tar[2][0],tags.UPDATE_MISSILE)
-        [pos,sour] = comm.recv(source=0,tag=tags.MISSILE_POS)
+        common_comm.send(tar,dest=tar[2][0],tag=tags.UPDATE_MISSILE)
+        pos = common_comm.recv(source=tar[2][0],tag=tags.MISSILE_POS)
         missile_pos = pos
-
+    t3 = MPI.Wtime()
+    print("missile launch %f"%(t3-t2))
     # judge if target and missile meet
     # print("Worker %d ,tar id :%s,pos :%d, missile pos :%d"%(comm.rank,tar[0],tar[1],missile_pos))
     if tar[2] != [-1,-1] and abs(tar[1] - missile_pos) <= 10:
         # print("Worker %d send HIT msg"%(comm.rank))
         tar[3] = 1
-        comm.send(tar,dest=0,tag=tags.HIT)
+        common_comm.send(tar,dest=size,tag=tags.HIT)
     else:
         # print("Worker %d send FLY msg"%(comm.rank))
-        comm.send(tar,dest=0,tag=tags.FLY)
+        common_comm.send(tar,dest=size,tag=tags.FLY)
+    t4 = MPI.Wtime()
+    print("return res %f"%(t4-t3))
     return
 
 def recv_running():
     while True:
-        msg = comm.recv(source=0,tag=MPI.ANY_TAG,status=status)
+        msg = common_comm.recv(source=size,tag=MPI.ANY_TAG,status=status)
         tag = status.Get_tag()
         source = status.Get_source()
-        # print("worker %d recv msg"%(source))
         if tag == tags.EXEC:
-            # print("Worker %d  wiil calculator"%(source))
+            start = MPI.Wtime()
             calculator(msg)
+            print("worker %d calculator time :%f"%(rank,MPI.Wtime()-start))
         
         elif tag == tags.EXIT:
             # print("Worker %d  wiil shutdown"%(comm.rank))
-            comm.send(None,dest=0,tag=tags.EXIT)
+            common_comm.send(None,dest=size,tag=tags.EXIT)
             break
         
     print ("Worker Process %d Done"%(rank))     
@@ -117,36 +119,29 @@ def undate_missilePos(missile_id):
 
 def car_recv_running():
     while True:
-        # print("car %d process recv msg"%(comm.rank))
-        msg = comm.recv(source=0,tag=MPI.ANY_TAG,status=status)
+        msg = common_comm.recv(source=MPI.ANY_SOURCE,tag=MPI.ANY_TAG,status=status)
         tag = status.Get_tag()
         source = status.Get_source()
         if tag == tags.CAR_EXEC:
-            # print("recv msg  CAR_EXEC from %d"%(source))
-            res = car_exec(msg[0])
-            Send(res,msg[1],tags.CAR_RES)
-            # comm.send(res,dest=source,tag=tags.CAR_RES)
+            res = car_exec(msg)
+            common_comm.send(res,dest=source,tag=tags.CAR_RES)
         
         elif tag == tags.LAUNCH_REQUIRE:
-            launch_info = car_launch(msg[0])
-            Send(launch_info,msg[1],tag=tags.LAUNCH_INFO)
-            # comm.send(launch_info,dest=source,tag=tags.LAUNCH_INFO)
+            launch_info = car_launch(msg)
+            common_comm.send(launch_info,dest=source,tag=tags.LAUNCH_INFO)
 
         elif tag == tags.UPDATE_MISSILE:
-            dst = msg[1]
-            msg = msg[0]
             missile_id = msg[2][1]
             missile_pos = missile_list[missile_id][1]
             undate_missilePos(missile_id)
-            Send(missile_pos,dst,tags.MISSILE_POS)
-            # comm.send(missile_pos,dest=source,tag=tags.MISSILE_POS)
+            common_comm.send(missile_pos,dest=source,tag=tags.MISSILE_POS)
 
         elif tag == tags.MISSILE_REPLACE:
             if msg[0] == comm.rank:
                 missile_list[msg[1]] = [-1,-1]
 
         elif tag == tags.EXIT:
-            comm.send(None,dest=0,tag=tags.EXIT)
+            common_comm.send(None,dest=size,tag=tags.EXIT)
             break
         
     print ("Car Process %d Done"%(rank))     
@@ -157,8 +152,8 @@ if __name__ == '__main__':
         rank = comm.Get_rank()
         size = comm.Get_size()
         car_num = 4
-        
-        # comm.bcast(car_num,root=0) 
+
+        common_comm = comm.Merge()
         car_list = [x+1 for x in range(car_num)]
         worker_list = [x for x in range(size) if x != 0 and x not in car_list]
 
@@ -166,7 +161,7 @@ if __name__ == '__main__':
         raise ValueError('Could not connect to parent - ')
     # worker process
     if rank in worker_list:
-        # print ("Worker Process Connect Success %d"% (rank))
+        # print ("Worker Process Connect Success %d"% (common_comm.rank))
         recv_t = threading.Thread(target=recv_running)
         recv_t.start()
         recv_t.join()
@@ -176,7 +171,7 @@ if __name__ == '__main__':
     elif rank in car_list:
         # [[target_id,pos],[],[]]
         missile_list = [[-1,0] for x in range(4)]
-        # print ("Car Process Connect Success %d"% (rank))
+        # print ("Car Process Connect Success %d"% (common_comm.rank))
         car_recv = threading.Thread(target=car_recv_running)
         car_recv.start()
         car_recv.join()

@@ -14,9 +14,6 @@ import time
 
 tags = common.tags
 
-# usage 
-# mpirun -n 2 demo.py 1 1
-
 # global parameters
 SCENE_NUM = 0
 FIRESYS_NUM_PER_SCENE = 0
@@ -24,21 +21,18 @@ TOTAL_RES_LIST = []
 
 def fire_sys():
     print ("Fire system id: %d"%(comm.rank))
-    Total_frame = 60
+    Total_frame = 6
     FireCar_NUM = 4
-    Max_process = 1 + 20 + FireCar_NUM
+    Max_process = 1 + 1 + FireCar_NUM
     Target_Q = []
     Res_list = []
-    # read target parameters
-    # 1: increase target
-    # 0: decrease target
-
+    
     # target = ["No.", position, [car_id, missile_id],meet_flag, timestamp]
     target_map = {
         5:[[str(x),100,[-1,-1],0,0] for x in range(30)],
-        20:[[str(x),90,[-1,-1],0,0] for x in range(30,30+50)],
-        40:[[str(x),120,[-1,-1],0,0] for x in range(80,80+40)],
-        50:[[str(x),70,[-1,-1],0,0] for x in range(120,120+10)],
+        # 20:[[str(x),90,[-1,-1],0,0] for x in range(30,30+50)],
+        # 40:[[str(x),120,[-1,-1],0,0] for x in range(80,80+40)],
+        # 50:[[str(x),70,[-1,-1],0,0] for x in range(120,120+10)],
     }
 
     # Process Pool
@@ -61,7 +55,7 @@ def fire_sys():
         
         frame += 1
         print("Frame %d time is :%f"%(frame,round(MPI.Wtime()-start,2)))
-    # time.sleep(5)
+
     print("Pool exit")
     pool.exit()
     
@@ -114,7 +108,6 @@ def main(argv):
         
 
 if __name__ == '__main__':
-    # 一级并行
     global comm,status
     comm = MPI.COMM_WORLD
     status = MPI.Status()
